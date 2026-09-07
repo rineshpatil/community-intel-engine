@@ -23,4 +23,5 @@ cp -R "$ROOT/src/community_intel" "$OUT/community_intel"
 # boto3 is provided by the Lambda runtime; shipping it wastes ~10MB.
 rm -rf "$OUT"/boto3 "$OUT"/botocore "$OUT"/*.dist-info
 
+python3 "$ROOT/scripts/verify_bundle.py"
 echo "built $OUT"

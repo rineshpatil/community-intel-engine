@@ -1459,16 +1459,18 @@ chmod +x scripts/build_lambda.sh
 
 Expected: `built /…/build/lambda`
 
-- [ ] **Step 3: Verify the bundle imports cleanly**
+- [ ] **Step 3: Verify the bundle structurally**
 
-Run:
+The bundle is cross-compiled for linux/x86_64, so it cannot be imported on a
+macOS or ARM dev machine — `pydantic_core._pydantic_core` is a Linux `.so`.
+Verification is structural instead, and `build_lambda.sh` runs it automatically:
 
 ```bash
-python3 -c "import sys; sys.path.insert(0, 'build/lambda'); import community_intel.handlers.webhook as w; print(w.verify_signature(b'x', None, 's'))"
+python3 scripts/verify_bundle.py
 ```
 
-Expected: `False` — confirms the package and its dependencies resolve from the
-bundle directory.
+Expected: all PASS — wheels target linux x86_64, dependencies present, boto3
+excluded, both handler paths resolve, size under 250MB.
 
 - [ ] **Step 4: Ignore build output**
 
