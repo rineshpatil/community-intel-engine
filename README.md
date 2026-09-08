@@ -34,7 +34,7 @@ uv run python scripts/local_smoke.py
 It reports what was stored versus enqueued and exits non-zero on failure, so
 it works as a pre-deploy gate.
 
-### 3. Against real AWS — needs `.env`
+### 3. Against a deployed stack — needs `.env`
 
 ```bash
 cp .env.example .env
@@ -51,6 +51,22 @@ Two things worth knowing:
   `~/.aws/credentials`, `AWS_PROFILE`, or SSO.
 
 `.env` is gitignored. `.env.example` is not, and carries no real values.
+
+**`botocore[crt]` is required locally.** Without it, boto3 cannot read the
+short-term credentials `aws login` issues and fails with
+`MissingDependencyException`. It is already in the `dev` extra, so
+`uv sync --all-extras` covers it. Lambda uses an execution role and does not
+need it.
+
+Once deployed, verify the live stack end to end:
+
+```bash
+uv run python scripts/deployed_smoke.py
+```
+
+This POSTs real signed requests to API Gateway and writes real DynamoDB rows,
+then deletes the rows it created. It is the only check that exercises Lambda
+packaging, IAM and SSM together — the local smoke test cannot.
 
 ## Building and deploying
 
