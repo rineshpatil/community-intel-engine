@@ -1,6 +1,6 @@
 import pathlib
 
-from aws_cdk import ArnFormat, CfnOutput, Duration, RemovalPolicy, Stack
+from aws_cdk import ArnFormat, CfnOutput, Duration, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_apigatewayv2 as apigw
 from aws_cdk import aws_apigatewayv2_integrations as integrations
 from aws_cdk import aws_dynamodb as dynamodb
@@ -15,11 +15,17 @@ from constructs import Construct
 BUNDLE = str(pathlib.Path(__file__).resolve().parent.parent / "build" / "lambda")
 
 WEBHOOK_SECRET_PARAM = "/community-intel/github-webhook-secret"
+OWNER = "rinesh_code"
 
 
 class IngestionStack(Stack):
     def __init__(self, scope: Construct, cid: str, **kwargs) -> None:
         super().__init__(scope, cid, **kwargs)
+
+        # Tagged at stack scope, not app scope: applying it in app.py would
+        # mean any other entry point produced untagged resources. The budget
+        # filter on Owner=rinesh_code depends on this.
+        Tags.of(self).add("Owner", OWNER)
 
         table = dynamodb.Table(
             self, "Items",

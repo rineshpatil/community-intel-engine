@@ -5,13 +5,7 @@ import aws_cdk as cdk
 
 from infra.stack import IngestionStack
 
-OWNER = "rinesh_code"
-
 app = cdk.App()
-
-# Applied at app scope so every taggable resource in every stack inherits it.
-# The budget filter on Owner=rinesh_code depends on this being present.
-cdk.Tags.of(app).add("Owner", OWNER)
 
 IngestionStack(
     app,
