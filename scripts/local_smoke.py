@@ -20,6 +20,7 @@ os.environ.update(
     CIE_GITHUB_WEBHOOK_SECRET="local-smoke-secret",
     CIE_GITHUB_BOT_ID="424242",
     CIE_GITHUB_BOT_LOGIN="community-intel[bot]",
+    CIE_REDDIT_SUBREDDITS='["widget"]',
 )
 
 import boto3  # noqa: E402
@@ -81,6 +82,105 @@ SCENARIOS = [
 ]
 
 
+# --- Reddit -------------------------------------------------------------
+# PRAW is stubbed rather than mocked at the HTTP layer: the poller's real
+# logic is its cursor handling, and that is what these fakes exercise.
+
+
+class FakeAuthor:
+    def __init__(self, name):
+        self.name = name
+
+
+class FakeSubmission:
+    def __init__(self, fullname, title, selftext):
+        self.name = fullname
+        self.title = title
+        self.selftext = selftext
+        self.permalink = f"/r/widget/comments/{fullname}/x/"
+        self.created_utc = 1788000000.0
+        self.author = FakeAuthor("ada")
+        self.subreddit = FakeSubreddit._singleton
+
+
+class FakeComment:
+    def __init__(self, fullname, parent, body):
+        self.name = fullname
+        self.body = body
+        self.link_id = parent
+        self.permalink = f"/r/widget/comments/{parent}/x/{fullname}/"
+        self.created_utc = 1788003600.0
+        self.author = FakeAuthor("grace")
+        self.subreddit = FakeSubreddit._singleton
+
+
+class FakeSubreddit:
+    _singleton = None
+
+    def __init__(self):
+        self.display_name = "widget"
+        FakeSubreddit._singleton = self
+
+    def new(self, limit=None):
+        return [
+            FakeSubmission("t3_aaa", "Crash after 2.1 upgrade",
+                           "Segfaults on every launch since upgrading."),
+            FakeSubmission("t3_bbb", "Dark mode request",
+                           "Would really like a dark theme for long sessions."),
+        ]
+
+    def comments(self, limit=None):
+        return [
+            FakeComment("t1_ccc", "t3_aaa",
+                        "Confirmed on Ubuntu 24.04, happens every single time."),
+            FakeComment("t1_ddd", "t3_aaa", "same"),   # contentless
+        ]
+
+
+class FakeReddit:
+    def __init__(self):
+        self._sub = FakeSubreddit()
+
+    def subreddit(self, name):
+        return self._sub
+
+
+def run_reddit() -> int:
+    from community_intel.handlers import reddit_poll
+
+    reddit_poll._client = lambda: FakeReddit()
+
+    first = reddit_poll.handler({}, None)["ingested"]
+    second = reddit_poll.handler({}, None)["ingested"]
+
+    print("\nReddit poller")
+    print("-" * 86)
+    print(f"first poll ingested  : {first}   "
+          "(2 submissions + 1 substantive comment; 'same' prefiltered)")
+    print(f"second poll ingested : {second}   "
+          "(cursors held - nothing reprocessed)")
+
+    failures = 0
+    if first != 3:
+        print(f"  NO  expected 3 on first poll, got {first}")
+        failures += 1
+    if second != 0:
+        print(f"  NO  expected 0 on second poll, got {second} "
+              "- cursor is not holding")
+        failures += 1
+
+    # Cursors must be per listing kind: t3_ and t1_ prefixes are disjoint, so a
+    # shared cursor could never match the comment listing.
+    subs = reddit_poll.read_cursor("widget", "submissions")
+    coms = reddit_poll.read_cursor("widget", "comments")
+    print(f"cursor submissions   : {subs}")
+    print(f"cursor comments      : {coms}")
+    if subs != "t3_aaa" or coms != "t1_ccc":
+        print("  NO  cursors not tracked per listing kind")
+        failures += 1
+    return failures
+
+
 def main() -> int:
     with mock_aws():
         boto3.client("dynamodb").create_table(
@@ -109,19 +209,29 @@ def main() -> int:
             failures += not ok
             print(f"{label:<28} {got:<24} {expected:<24} {'yes' if ok else 'NO'}")
 
+        failures += run_reddit()
+
         stored = boto3.client("dynamodb").scan(TableName="items")["Items"]
         depth = boto3.client("sqs").get_queue_attributes(
             QueueUrl=qurl, AttributeNames=["ApproximateNumberOfMessages"]
         )["Attributes"]["ApproximateNumberOfMessages"]
 
-        print(f"\nDeliveries sent : {len(SCENARIOS)}")
-        print(f"DynamoDB items  : {len(stored)}   "
+        items = [i for i in stored if i["pk"]["S"].startswith("ITEM#")]
+        cursors = [i for i in stored if i["pk"]["S"].startswith("CURSOR#")]
+
+        print(f"\nGitHub deliveries : {len(SCENARIOS)}")
+        print(f"Items stored      : {len(items)}   "
               "(tampered rejected at signature; duplicate wrote no second row)")
-        print(f"SQS depth       : {depth}   "
+        print(f"Cursor rows       : {len(cursors)}   "
+              "(one per subreddit per listing kind)")
+        print(f"SQS depth         : {depth}   "
               "(only substantive items cost a pipeline invocation)")
-        print("\nstored item ids:")
-        for it in sorted(stored, key=lambda i: i["pk"]["S"]):
+        print("\nstored items:")
+        for it in sorted(items, key=lambda i: i["pk"]["S"]):
             print(f"  {it['pk']['S']}")
+        print("cursor rows:")
+        for c in sorted(cursors, key=lambda i: i["sk"]["S"]):
+            print(f"  {c['pk']['S']}  {c['sk']['S']} -> {c['last_fullname']['S']}")
 
         return 1 if failures else 0
 
