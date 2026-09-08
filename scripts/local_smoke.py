@@ -21,6 +21,10 @@ os.environ.update(
     CIE_GITHUB_BOT_ID="424242",
     CIE_GITHUB_BOT_LOGIN="community-intel[bot]",
     CIE_REDDIT_SUBREDDITS='["widget"]',
+    # Explicitly empty: Settings also reads .env, and a deployed .env would
+    # otherwise point this at a real SSM parameter. This script must depend on
+    # nothing outside itself.
+    CIE_GITHUB_WEBHOOK_SECRET_PARAM="",
 )
 
 import boto3  # noqa: E402
