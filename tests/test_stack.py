@@ -94,3 +94,34 @@ def test_dynamodb_grants_are_least_privilege():
     assert granted & forbidden == set(), f"over-granted: {granted & forbidden}"
     assert "dynamodb:PutItem" in granted
     assert "dynamodb:GetItem" in granted    # reddit cursor reads
+
+
+def test_every_billable_resource_carries_the_owner_tag():
+    """Owner=rinesh_code must reach everything the budget filter can see.
+
+    Untaggable types (inline IAM::Policy, Lambda::Permission, ApiGatewayV2
+    Route/Integration, CDK::Metadata) have no Tags property in CloudFormation
+    and incur no cost, so they are excluded rather than asserted on.
+    """
+    billable = [
+        "AWS::DynamoDB::Table",
+        "AWS::SQS::Queue",
+        "AWS::Lambda::Function",
+        "AWS::ApiGatewayV2::Api",
+        "AWS::ApiGatewayV2::Stage",
+        "AWS::Events::Rule",
+    ]
+    tpl = template()
+    for rtype in billable:
+        found = tpl.find_resources(rtype)
+        assert found, f"no {rtype} in template"
+        for lid, res in found.items():
+            tags = res.get("Properties", {}).get("Tags")
+            if isinstance(tags, dict):
+                present = tags.get("Owner") == "rinesh_code"
+            else:
+                present = any(
+                    t.get("Key") == "Owner" and t.get("Value") == "rinesh_code"
+                    for t in (tags or [])
+                )
+            assert present, f"{rtype} {lid} is missing Owner=rinesh_code"
