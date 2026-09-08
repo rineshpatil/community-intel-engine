@@ -72,3 +72,25 @@ def test_webhook_can_read_only_its_own_ssm_parameter():
         )
     ]
     assert len(ssm_statements) == 1, "exactly one function may read the secret"
+
+
+def test_dynamodb_grants_are_least_privilege():
+    """Pin the exact DynamoDB actions each function gets.
+
+    grant_read_write_data would also allow DeleteItem, Scan, BatchWriteItem and
+    stream reads on the corpus table. Nothing in this codebase does any of
+    those, so they must not be granted.
+    """
+    forbidden = {
+        "dynamodb:DeleteItem", "dynamodb:Scan", "dynamodb:BatchWriteItem",
+        "dynamodb:UpdateItem", "dynamodb:GetRecords",
+    }
+    granted = set()
+    for policy in template().find_resources("AWS::IAM::Policy").values():
+        for stmt in policy["Properties"]["PolicyDocument"]["Statement"]:
+            actions = stmt["Action"]
+            granted.update(actions if isinstance(actions, list) else [actions])
+
+    assert granted & forbidden == set(), f"over-granted: {granted & forbidden}"
+    assert "dynamodb:PutItem" in granted
+    assert "dynamodb:GetItem" in granted    # reddit cursor reads

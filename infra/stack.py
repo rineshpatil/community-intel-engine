@@ -67,10 +67,24 @@ class IngestionStack(Stack):
             environment=common_env,
         )
 
-        # grant_* emits explicit action lists, never wildcards.
         for fn in (webhook, reddit):
-            table.grant_read_write_data(fn)
             queue.grant_send_messages(fn)
+
+        # Least privilege, deliberately not grant_read_write_data: that helper
+        # also hands out DeleteItem, Scan, BatchWriteItem and stream reads on
+        # the corpus table, none of which this code performs.
+        webhook.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["dynamodb:PutItem"],      # one conditional write
+                resources=[table.table_arn],
+            )
+        )
+        reddit.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["dynamodb:GetItem", "dynamodb:PutItem"],  # + cursors
+                resources=[table.table_arn],
+            )
+        )
 
         # Scoped to the one parameter, not the whole /community-intel/ path.
         webhook.add_to_role_policy(
