@@ -28,7 +28,10 @@ class Settings(BaseSettings):
     reddit_subreddits: list[str] = []
     reddit_client_id: str = ""
     reddit_client_secret: str = ""
-    reddit_user_agent: str = "community-intel/0.1"
+    # Reddit throttles generic user agents. Convention is
+    # platform:app-id:version (by /u/username) — add the username
+    # before any real use.
+    reddit_user_agent: str = "python:community-intel-engine:0.1.0"
 
 
 @lru_cache
