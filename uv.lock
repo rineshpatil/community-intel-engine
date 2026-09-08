@@ -379,7 +379,7 @@ requires-dist = [
     { name = "moto", extras = ["dynamodb", "sqs"], marker = "extra == 'dev'", specifier = ">=5,<6" },
     { name = "praw", specifier = ">=7.7,<8" },
     { name = "pydantic", specifier = ">=2.7,<3" },
-    { name = "pydantic-settings", specifier = ">=2.2,<3" },
+    { name = "pydantic-settings", extras = ["dotenv"], specifier = ">=2.2,<3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<9" },
 ]
 provides-extras = ["dev"]

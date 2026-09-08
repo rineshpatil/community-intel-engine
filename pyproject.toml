@@ -4,7 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.7,<3",
-    "pydantic-settings>=2.2,<3",
+    "pydantic-settings[dotenv]>=2.2,<3",
     "boto3>=1.34",
     "praw>=7.7,<8",
 ]

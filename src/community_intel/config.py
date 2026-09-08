@@ -7,7 +7,14 @@ class Settings(BaseSettings):
     # protected_namespaces=() so future MODEL_* settings do not collide with
     # pydantic's reserved "model_" prefix.
     model_config = SettingsConfigDict(
-        env_prefix="CIE_", extra="ignore", protected_namespaces=()
+        env_prefix="CIE_",
+        extra="ignore",
+        protected_namespaces=(),
+        # Local convenience only. Lambda has no .env and pydantic-settings
+        # skips a missing file silently, so this is inert in deployment.
+        # Precedence: shell environment wins over .env.
+        env_file=".env",
+        env_file_encoding="utf-8",
     )
 
     table_name: str
